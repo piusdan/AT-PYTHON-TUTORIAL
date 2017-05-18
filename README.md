@@ -1,0 +1,294 @@
+# GETTING STARTED WITH AFRICAS TALKING APIs - Python
+
+Prerequisites
+=============
+
+* We assume that you have gone through the Setup guide (setting up products on the sandbox). If not, kindly take a look at it [here](http://docs.africastalking.com/).
+* You are registered on the sandbox and have access to either the web app or the android app.
+* You have generated the API key [here](https://sandbox.africastalking.com/settings/apikey).
+* Login and navigate to this link to create a voice number.
+* We also expect that you either have a virtual machine online, or ar using a localhost tunneling service like ngrok, to expose your local host to the web.
+* To set up on ngrok on your localhost, register for free and refer to the getting started [documentation](https://ngrok.com/docs).
+
+Setup and dependancy installations
+==================================
+*Windows*
+
+Python doesn’t come preinstalled on Windows. You need to download and install in manually. You can follow this guide to download Python 2.7. You can also install the latest version (3.5) from their website. We support both versions, so that should not be a problem.
+
+Set up Python by running the file you have just downloaded. By default it will be stored on 
+
+```bash
+c:\Python27\
+```
+
+Remember to check the “Add python.exe to Path” option during installation.
+You will need a text editor, for example **sublime, atom, vim**.
+
+*Linux - \*unix variants / mac*
+
+The latest versions of CentOs, Fedora, RedHat Enterprise and Ubuntu come with Python 2.7 installed.
+
+To check the version of Python you have installed, run this command
+
+```bash
+$ python --version
+```
+
+*Installing pip*
+
+
+Pip is a package management system used to install and manage software packages. 
+You first need to check if pip is installed on your system. To do so, open the terminal and issue this command
+
+(windows)
+> python -m pip --version
+
+(linux)
+>$ pip --version
+
+To install pip go [here](https://bootstrap.pypa.io/get-pip.py) and save the file if you are prompted to do so. If the code appears on the browser, copy and paste it to your text editor and save it as *get-pip.py*
+
+Open the terminal, locate the file you have just saved and run it with administrative privileges
+
+(windows)
+>cd Downloads
+Downloads> python get-pip.py
+
+(linux)
+
+>$cd Downloads && sudo python get-pip.py
+
+make sure that pip was installed correctly.
+
+>$pip --version
+
+To start working on our API’s you need to download Africa’s Talking API gateway. This is where pip comes in.
+First create a working directory
+
+```
+$mkdir projectName
+$cd 
+$cd projectName
+```
+
+Make sure you store the dependencies and installed packages in a text file with the 
+```pip freeze > file.txt``` command 
+then
+
+>$pip install africastalkinggateway && pip freeze > at-freeze.txt
+
+For python 3.+ you can install the gateway as follows:
+
+>$pip3 install africastalkinggateway && pip3 freeze > at3-freeze.txt
+
+##### Flask (ussd, voice delivery reports and handling call_back calls)
+## Programmer Level
+### 1. Beginner 
+
+#### SMS
+
+*Sending SMS*
+
+To send an SMS, we have to create a gateway instance of the Gateway class, while creating the instance we populate our credentials to access the API; this is by adding your username and API_KEY.
+
+We invoke the send method on our gateway instance, example below.
+
+```python
+# import our API wrapper
+from africastalking.AfricasTalkingGateway import AfricasTalkingGateway
+
+# instantiate the gateway class (optional when using sandbox) add sandbox flag
+gateway = AfricasTalkingGateway("some-username", "some-apikey", "optional-sandbox")
+
+# send message using by calling the sendMessage method on our API
+gateway.sendMessage('+254701XXXXXX', "Hi, I'm texting")
+```
+
+#### AIRTIME
+
+*Sending Airtime*
+
+To send airtime, we also authenticate to the API, by creating a gateway instance and adding the username and api_key parameters.
+
+```python
+# Specify an array of dicts to hold the recipients and the amount to send
+recipients = [{"phoneNumber" : "+2547XXYYYZZZ", 
+               "amount"      : "KES XX"}]
+
+# Create a new instance of our awesome gateway class
+gateway    = AfricasTalkingGateway(username, apikey)
+
+try:
+    # That's it, hit send and we'll take care of the rest. 
+    responses = gateway.sendAirtime(recipients)
+    for response in responses:
+        print "phoneNumber=%s; amount=%s; status=%s; discount=%s; requestId=%s" %(response['phoneNumber'],
+                        response['amount'],
+                        response['status'],
+                        response['discount']
+                        response['requestId'])
+
+except AfricasTalkingGatewayException, e:
+    print 'Encountered an error while sending airtime: %s' % str(e)
+
+We specify the recipients as a List of Dictionary objects; 
+
+recipients = [{"phoneNumber" : "+2547XXYYYZZZ", 
+               "amount"      : "KES XX"}]
+```
+
+This allows you to send different amount to different numbers.
+We have wrapped the call in a Try/ Catch so we can grab any Exception generated by the sendAirtime call.
+
+We print the response for logging purposes, we are able to see the amount it cost us and discount we got for making the call.
+
+
+*Airtime delivery report*
+
+When we send a message; we send back a delivery report updating you on the status of the delivery of the message.
+
+```python
+# give us a HTTP endpoint which can receive a POST request
+# this is a simple Flask setup, with a function based view.
+
+# be careful of the / slash at the end of the route - it does not exist
+@app.route('/api/airtime/dlr', methods=['POST'])
+def airtime_dlr_callback():
+    # Reads the variables sent via POST from our gateway
+    status        = request.values.get('status', None)
+    transactionId = request.values.get('transactionId', None)
+
+    # update db or some sort of operation
+    print(status, transactionId)
+
+    resp = make_response('OK', 200)
+    resp.headers['Content-Type'] = 'text/plain'
+    return resp
+```
+
+We send delivery reports through a POST request; in this request we send delivery status data for a particular message you sent. This includes, the status and transaction id, this is how you would capture it from a request object in [Flask](http://flask.pocoo.org/).
+ 
+ ```python
+ status        = request.values.get('status', None)
+ transactionId = request.values.get('transactionId', None)
+```
+
+#### VOICE
+
+*Making a call*
+
+In order to make a call, you need a virtual number, you can create one [here](https://www.africastalking.com/). We have integrations with Telcos; and use their channels to make calls; this allows you to make a call from any virtual number that we manage for you. Below is a diagram of how the calls work.
+
+![outboundcalls](https://cloud.githubusercontent.com/assets/10922198/26199664/8f6914a0-3bd3-11e7-8bdc-484756bcede5.jpg)
+
+
+```python
+callFrom = "+254711082XYZ"
+
+# Specify the numbers that you want to call to in a comma-separated list
+# Please ensure you include the country code (+254 for Kenya in this case, +256 Uganda)
+callTo   = "+254711XXXYYY,+254733YYYZZZ"
+
+# Create a new instance of our awesome gateway class
+gateway  = AfricasTalkingGateway(username, apikey)
+
+try:
+    # Make the call
+    results = gateway.call(callFrom, callTo)
+
+    for result in results:
+        # Only status "Queued" means the call was successfully placed
+        print "Status : %s; phoneNumber : %s " % (result['status'],
+                                result['phoneNumber'])
+
+    # Our API will now contact your callback URL once recipient answers the call!
+except AfricasTalkingGatewayException, e:
+    print 'Encountered an error while making the call: %s' % str(e)
+```
+
+*Sample:*
+
+We initiate a call with the call method on the gateway instance we created. You need to be authenticated to do this; so ensure that you have passed your username and api_key on the instance.
+
+We want to log the results of the call method, so we have to persist it on a variable.
+
+```python 
+results = gateway.call(callFrom, callTo)
+```
+
+We log, in order to check on the call cost and result; this could be a success if the call was queued or fail if there was some sort of error/ exception.
+
+*Handling a voice call*
+
+Now that we have made a call; how do we handle the call?
+We have to return a response; whenever a call is initiated, we try to reach you by sending you POST params on a callback that you add <here>.
+
+So, you have to setup a way to handle a POST request either using Django/ Flask or any other Python Framework. Here’s a sample using Flask micro-framework.
+
+```python
+@app.route('/api/voice/callback/', methods=['POST'])
+def voice_callback():
+    if request.method == 'POST':
+
+        is_active     = request.values.get('isActive', None)
+        caller_number = request.values.get('callerNumber', None)
+
+        response = """<Response>
+                        <Say> Hello, welcome to the test site. your number is {}</Say>
+                      </Response>'"".format(caller_number)
+```
+
+When we receive a call; we create an xml response by returning an xml string. 
+Voice works with XML commands; [here’s](http://docs.africastalking.com/voice/call) a list commands and what they do.
+
+#### PAYMENTS
+
+
+#### USSD
+
+Handling a USSD call is like handling the SMS callback on the API. We POST a USSD call to you as a POST request; this is pushed to a callback_url on any remote host;  you could also use ngrok <here> First register your callback url <here>. Then run this code, you can download the file <here>. And dial the USSD code you have raised.
+
+A few things to note about USSD:
+
+* USSD is session driven. 
+   Every request we send you will contain a sessionId, and this will be maintained until that session is completed.
+   You will need to let the Mobile Service Provider know whether the session is complete or not. 
+* If the session is ongoing, please begin your response with CON. If this is the last response for that session, begin your response with END.
+* If we get a HTTP error response (Code 40X) from your script, or a malformed response (does not begin with CON or END, we will terminate the USSD session gracefully.
+
+|   Parameter   |    Method     |                      Description                                                                                                    |
+| ------------- | :-----------: | ----------------------------------------------------------------------------------------------------------------------------------: |
+| sessionId     |    POST       | This is a session unique value generated when the session starts and sent every time a mobile subscriber response has been received |
+| phoneNumber   |    POST       | This is the mobile subscriber number                                                                                                |
+| serviceCode   |    POST       | This is your ussd code                                                                                                              |
+| text          |    POST       | This is the user input                                                                                                              |
+
+```python
+from app import app, logging
+from flask import (abort, request, make_response)
+
+
+@app.route('/api/ussd/callback/', methods=['POST'])
+def ussd_callback():
+    if request.method == 'POST':
+        if request.headers['Content-Type'] != 'application/x-www-form-urlencoded':
+            abort(400)
+        # Reads the variables sent via POST from our gateway
+        session_id = request.values.get("sessionId", None)
+        phone_number = request.values.get("phoneNumber", None)
+        text = request.values.get("text", None)
+
+        menu_text = "END Africa's-Talking Show and Tell.\n"
+        menu_text += "You're registered we'll call you and ask you a few questions."
+        menu_text += "You stand a chance to win airtime"
+
+        resp = make_response('Error', 400)
+        resp.headers['Content-Type'] = "text/plain"
+        return resp
+```
+
+Congratulations you have completed the begginer level walkthrough of our awsome APIs
+Next look at our [Microfinance USSD application](https://github.com/Piusdan/USSD-Python-Demo) fork it and remember to share your progress with us :-)
+
+Happy coding!
